@@ -745,3 +745,959 @@ In this example:
 - `app.use()` is used to define a middleware that handles requests that don't match any defined routes. In this case, it sends a 404 Not Found response.
 
 Express.js provides a flexible and powerful routing system that allows you to create complex APIs and web applications by defining various routes and their corresponding actions. You can create middleware functions, handle different HTTP methods, parse URL parameters, and more using Express's routing capabilities.
+
+
+# MVC REST API
+
+Creating a basic MVC (Model-View-Controller) REST API in Node.js involves setting up a server, defining routes, creating controllers to handle the business logic, and interacting with a database as needed. Here's a simple example using Express.js as the web framework and MongoDB as the database.
+
+1. **Install Dependencies:**
+   Make sure you have Node.js installed. Create a new directory for your project, navigate to it in the terminal, and run the following commands:
+
+   ```bash
+   npm init -y
+   npm install express mongoose body-parser
+   ```
+
+2. **Project Structure:**
+   Create the following project structure:
+
+   ```
+   /your-project
+   ├── /controllers
+   |   └── UserController.js
+   ├── /models
+   |   └── User.js
+   ├── /routes
+   |   └── api.js
+   ├── app.js
+   └── .env
+   ```
+
+3. **Set Up Environment Variables:**
+   Create a `.env` file in the root of your project and define your MongoDB connection string:
+
+   ```env
+   MONGO_URI=mongodb://localhost:27017/your-database
+   ```
+
+4. **Create Models:**
+   Define your data models. In this example, we'll create a simple `User` model in `models/User.js`:
+
+   ```javascript
+   // models/User.js
+   const mongoose = require('mongoose');
+
+   const userSchema = new mongoose.Schema({
+     username: { type: String, required: true },
+     email: { type: String, required: true },
+     password: { type: String, required: true },
+   });
+
+   module.exports = mongoose.model('User', userSchema);
+   ```
+
+5. **Create Controllers:**
+   Implement controllers to handle the business logic. Create `controllers/UserController.js`:
+
+   ```javascript
+   // controllers/UserController.js
+   const User = require('../models/User');
+
+   exports.getAllUsers = async (req, res) => {
+     try {
+       const users = await User.find();
+       res.json(users);
+     } catch (error) {
+       res.status(500).json({ error: error.message });
+     }
+   };
+
+   exports.createUser = async (req, res) => {
+     try {
+       const user = await User.create(req.body);
+       res.status(201).json(user);
+     } catch (error) {
+       res.status(400).json({ error: error.message });
+     }
+   };
+   ```
+
+6. **Create Routes:**
+   Define routes to map HTTP requests to controller methods. Create `routes/api.js`:
+
+   ```javascript
+   // routes/api.js
+   const express = require('express');
+   const router = express.Router();
+   const UserController = require('../controllers/UserController');
+
+   // GET /api/users
+   router.get('/users', UserController.getAllUsers);
+
+   // POST /api/users
+   router.post('/users', UserController.createUser);
+
+   module.exports = router;
+   ```
+
+7. **Set Up Express Server:**
+   Create `app.js` to set up the Express server:
+
+   ```javascript
+   // app.js
+   const express = require('express');
+   const mongoose = require('mongoose');
+   const bodyParser = require('body-parser');
+   require('dotenv').config();
+
+   const app = express();
+   const PORT = process.env.PORT || 3000;
+
+   // Connect to MongoDB
+   mongoose.connect(process.env.MONGO_URI, {
+     useNewUrlParser: true,
+     useUnifiedTopology: true,
+   });
+
+   // Middleware
+   app.use(bodyParser.json());
+
+   // Routes
+   const apiRoutes = require('./routes/api');
+   app.use('/api', apiRoutes);
+
+   // Start server
+   app.listen(PORT, () => {
+     console.log(`Server is running on http://localhost:${PORT}`);
+   });
+   ```
+
+8. **Run the Application:**
+   Start your application by running:
+
+   ```bash
+   node app.js
+   ```
+
+Now, your basic MVC REST API is up and running. You can use tools like Postman to test your API endpoints.
+
+Remember to enhance the project as needed, handle authentication, validation, and add more features based on your application requirements.
+
+# Authentication
+
+Authentication in Node.js can be implemented using various methods, and one common approach is to use JSON Web Tokens (JWT) along with a middleware like Passport.js. Here's a step-by-step guide on implementing basic authentication in a Node.js application:
+
+1. **Install Dependencies:**
+   Start by installing the necessary packages:
+
+   ```bash
+   npm install express mongoose body-parser jsonwebtoken passport passport-local passport-jwt bcrypt
+   ```
+
+2. **Set Up Project Structure:**
+   Create the following project structure:
+
+   ```
+   /your-project
+   ├── /controllers
+   |   └── AuthController.js
+   ├── /models
+   |   └── User.js
+   ├── /routes
+   |   ├── api.js
+   |   └── auth.js
+   ├── app.js
+   └── .env
+   ```
+
+3. **Set Up Environment Variables:**
+   Create a `.env` file in the root of your project and define a secret key for JWT:
+
+   ```env
+   JWT_SECRET=your-secret-key
+   ```
+
+4. **Create Models:**
+   Define a `User` model in `models/User.js`:
+
+   ```javascript
+   // models/User.js
+   const mongoose = require('mongoose');
+
+   const userSchema = new mongoose.Schema({
+     username: { type: String, required: true },
+     password: { type: String, required: true },
+   });
+
+   module.exports = mongoose.model('User', userSchema);
+   ```
+
+5. **Create Authentication Controller:**
+   Implement an authentication controller in `controllers/AuthController.js`:
+
+   ```javascript
+   // controllers/AuthController.js
+   const User = require('../models/User');
+   const bcrypt = require('bcrypt');
+   const jwt = require('jsonwebtoken');
+   require('dotenv').config();
+
+   exports.register = async (req, res) => {
+     try {
+       const { username, password } = req.body;
+       const hashedPassword = await bcrypt.hash(password, 10);
+       const user = await User.create({ username, password: hashedPassword });
+       res.status(201).json(user);
+     } catch (error) {
+       res.status(400).json({ error: error.message });
+     }
+   };
+
+   exports.login = async (req, res) => {
+     try {
+       const { username, password } = req.body;
+       const user = await User.findOne({ username });
+
+       if (!user) {
+         return res.status(401).json({ error: 'Invalid credentials' });
+       }
+
+       const isPasswordValid = await bcrypt.compare(password, user.password);
+
+       if (!isPasswordValid) {
+         return res.status(401).json({ error: 'Invalid credentials' });
+       }
+
+       const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+       res.json({ token });
+     } catch (error) {
+       res.status(500).json({ error: error.message });
+     }
+   };
+   ```
+
+6. **Create Authentication Routes:**
+   Define authentication routes in `routes/auth.js`:
+
+   ```javascript
+   // routes/auth.js
+   const express = require('express');
+   const router = express.Router();
+   const AuthController = require('../controllers/AuthController');
+
+   // POST /api/auth/register
+   router.post('/register', AuthController.register);
+
+   // POST /api/auth/login
+   router.post('/login', AuthController.login);
+
+   module.exports = router;
+   ```
+
+7. **Set Up Express Server:**
+   Update `app.js` to include the authentication routes and middleware:
+
+   ```javascript
+   // app.js
+   const express = require('express');
+   const mongoose = require('mongoose');
+   const bodyParser = require('body-parser');
+   const passport = require('passport');
+   const passportJWT = require('passport-jwt');
+   const LocalStrategy = require('passport-local').Strategy;
+   const User = require('./models/User');
+   require('dotenv').config();
+
+   const app = express();
+   const PORT = process.env.PORT || 3000;
+
+   // Connect to MongoDB
+   mongoose.connect(process.env.MONGO_URI, {
+     useNewUrlParser: true,
+     useUnifiedTopology: true,
+   });
+
+   // Middleware
+   app.use(bodyParser.json());
+   app.use(passport.initialize());
+
+   // Passport Local Strategy
+   passport.use(
+     new LocalStrategy(async (username, password, done) => {
+       try {
+         const user = await User.findOne({ username });
+
+         if (!user) {
+           return done(null, false, { message: 'Invalid credentials' });
+         }
+
+         const isPasswordValid = await bcrypt.compare(password, user.password);
+
+         if (!isPasswordValid) {
+           return done(null, false, { message: 'Invalid credentials' });
+         }
+
+         return done(null, user);
+       } catch (error) {
+         return done(error);
+       }
+     })
+   );
+
+   // Passport JWT Strategy
+   const ExtractJWT = passportJWT.ExtractJwt;
+   const JWTStrategy = passportJWT.Strategy;
+
+   passport.use(
+     new JWTStrategy(
+       {
+         jwtFromRequest: ExtractJWT.fromAuthHeaderAsBearerToken(),
+         secretOrKey: process.env.JWT_SECRET,
+       },
+       async (jwtPayload, done) => {
+         try {
+           const user = await User.findById(jwtPayload.userId);
+
+           if (!user) {
+             return done(null, false, { message: 'User not found' });
+           }
+
+           return done(null, user);
+         } catch (error) {
+           return done(error);
+         }
+       }
+     )
+   );
+
+   // Routes
+   const apiRoutes = require('./routes/api');
+   const authRoutes = require('./routes/auth');
+   app.use('/api', passport.authenticate('jwt', { session: false }), apiRoutes);
+   app.use('/api/auth', auth
+
+Routes);
+
+   // Start server
+   app.listen(PORT, () => {
+     console.log(`Server is running on http://localhost:${PORT}`);
+   });
+   ```
+
+   In this example, the Passport Local Strategy is used for the login route, and the Passport JWT Strategy is used to protect the other API routes. The `passport.authenticate('jwt', { session: false })` middleware is applied to the `/api` routes to ensure that only authenticated users can access them.
+
+8. **Test the Authentication:**
+   Use tools like Postman to test the registration and login endpoints. After successfully logging in, you can include the generated JWT token in the Authorization header of your requests to access the protected API routes.
+
+This is a basic setup for authentication in a Node.js application. Depending on your specific requirements, you might want to add additional features such as user roles, token expiration handling, refresh tokens, etc. Additionally, consider using HTTPS in a production environment for secure communication.
+
+# JWT Auth
+
+Implementing JWT (JSON Web Token) authentication in Node.js involves creating and verifying tokens for user authentication. Below is a step-by-step guide using Node.js, Express, and the `jsonwebtoken` library.
+
+1. **Install Dependencies:**
+   Start by installing the necessary packages:
+
+   ```bash
+   npm install express mongoose body-parser jsonwebtoken
+   ```
+
+2. **Set Up Project Structure:**
+   Create the following project structure:
+
+   ```
+   /your-project
+   ├── /controllers
+   |   └── AuthController.js
+   ├── /models
+   |   └── User.js
+   ├── /routes
+   |   └── api.js
+   ├── app.js
+   └── .env
+   ```
+
+3. **Set Up Environment Variables:**
+   Create a `.env` file in the root of your project and define a secret key for JWT:
+
+   ```env
+   JWT_SECRET=your-secret-key
+   ```
+
+4. **Create Models:**
+   Define a `User` model in `models/User.js`:
+
+   ```javascript
+   // models/User.js
+   const mongoose = require('mongoose');
+
+   const userSchema = new mongoose.Schema({
+     username: { type: String, required: true },
+     password: { type: String, required: true },
+   });
+
+   module.exports = mongoose.model('User', userSchema);
+   ```
+
+5. **Create Authentication Controller:**
+   Implement an authentication controller in `controllers/AuthController.js`:
+
+   ```javascript
+   // controllers/AuthController.js
+   const User = require('../models/User');
+   const bcrypt = require('bcrypt');
+   const jwt = require('jsonwebtoken');
+   require('dotenv').config();
+
+   exports.register = async (req, res) => {
+     try {
+       const { username, password } = req.body;
+       const hashedPassword = await bcrypt.hash(password, 10);
+       const user = await User.create({ username, password: hashedPassword });
+       res.status(201).json(user);
+     } catch (error) {
+       res.status(400).json({ error: error.message });
+     }
+   };
+
+   exports.login = async (req, res) => {
+     try {
+       const { username, password } = req.body;
+       const user = await User.findOne({ username });
+
+       if (!user) {
+         return res.status(401).json({ error: 'Invalid credentials' });
+       }
+
+       const isPasswordValid = await bcrypt.compare(password, user.password);
+
+       if (!isPasswordValid) {
+         return res.status(401).json({ error: 'Invalid credentials' });
+       }
+
+       const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+       res.json({ token });
+     } catch (error) {
+       res.status(500).json({ error: error.message });
+     }
+   };
+   ```
+
+6. **Create Authentication Routes:**
+   Define authentication routes in `routes/auth.js`:
+
+   ```javascript
+   // routes/auth.js
+   const express = require('express');
+   const router = express.Router();
+   const AuthController = require('../controllers/AuthController');
+
+   // POST /api/auth/register
+   router.post('/register', AuthController.register);
+
+   // POST /api/auth/login
+   router.post('/login', AuthController.login);
+
+   module.exports = router;
+   ```
+
+7. **Set Up Express Server:**
+   Update `app.js` to include the authentication routes and middleware:
+
+   ```javascript
+   // app.js
+   const express = require('express');
+   const mongoose = require('mongoose');
+   const bodyParser = require('body-parser');
+   const jwt = require('jsonwebtoken');
+   require('dotenv').config();
+
+   const app = express();
+   const PORT = process.env.PORT || 3000;
+
+   // Connect to MongoDB
+   mongoose.connect(process.env.MONGO_URI, {
+     useNewUrlParser: true,
+     useUnifiedTopology: true,
+   });
+
+   // Middleware
+   app.use(bodyParser.json());
+
+   // Routes
+   const authRoutes = require('./routes/auth');
+   app.use('/api/auth', authRoutes);
+
+   // Start server
+   app.listen(PORT, () => {
+     console.log(`Server is running on http://localhost:${PORT}`);
+   });
+   ```
+
+   This example focuses on the registration and login endpoints. The `jsonwebtoken` library is used to generate JWT tokens upon successful login.
+
+8. **Testing the Authentication:**
+   Use tools like Postman to test the registration and login endpoints. After successfully logging in, you can include the generated JWT token in the Authorization header of your requests to access protected resources.
+
+This is a basic setup for JWT authentication in a Node.js application. Depending on your specific requirements, you might want to add additional features such as token expiration handling, refresh tokens, user roles, etc.
+
+# User Roles | Authorization
+
+Implementing user roles and authorization in Node.js involves assigning roles to users and checking these roles to grant or deny access to certain resources or actions. Below is an example of how you can implement user roles and authorization using Node.js, Express, and JWT.
+
+Let's extend the previous example with user roles:
+
+1. **Update the User Model:**
+   Extend the `User` model in `models/User.js` to include a `role` field:
+
+   ```javascript
+   // models/User.js
+   const mongoose = require('mongoose');
+
+   const userSchema = new mongoose.Schema({
+     username: { type: String, required: true },
+     password: { type: String, required: true },
+     role: { type: String, enum: ['user', 'admin'], default: 'user' }, // Add role field
+   });
+
+   module.exports = mongoose.model('User', userSchema);
+   ```
+
+   In this example, users can have either the 'user' or 'admin' role.
+
+2. **Update the Authentication Controller:**
+   Update `controllers/AuthController.js` to include the user's role in the JWT token:
+
+   ```javascript
+   // controllers/AuthController.js
+   const User = require('../models/User');
+   const bcrypt = require('bcrypt');
+   const jwt = require('jsonwebtoken');
+   require('dotenv').config();
+
+   exports.register = async (req, res) => {
+     try {
+       const { username, password, role } = req.body;
+       const hashedPassword = await bcrypt.hash(password, 10);
+       const user = await User.create({ username, password: hashedPassword, role });
+       res.status(201).json(user);
+     } catch (error) {
+       res.status(400).json({ error: error.message });
+     }
+   };
+
+   exports.login = async (req, res) => {
+     try {
+       const { username, password } = req.body;
+       const user = await User.findOne({ username });
+
+       if (!user) {
+         return res.status(401).json({ error: 'Invalid credentials' });
+       }
+
+       const isPasswordValid = await bcrypt.compare(password, user.password);
+
+       if (!isPasswordValid) {
+         return res.status(401).json({ error: 'Invalid credentials' });
+       }
+
+       const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, {
+         expiresIn: '1h',
+       });
+
+       res.json({ token });
+     } catch (error) {
+       res.status(500).json({ error: error.message });
+     }
+   };
+   ```
+
+3. **Create Authorization Middleware:**
+   Create a middleware function in `middlewares/auth.js` to check user roles and grant or deny access:
+
+   ```javascript
+   // middlewares/auth.js
+   const jwt = require('jsonwebtoken');
+   require('dotenv').config();
+
+   module.exports = (allowedRoles) => {
+     return (req, res, next) => {
+       const token = req.headers.authorization;
+
+       if (!token) {
+         return res.status(401).json({ error: 'Unauthorized' });
+       }
+
+       try {
+         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+         const { role } = decoded;
+
+         if (!allowedRoles.includes(role)) {
+           return res.status(403).json({ error: 'Forbidden' });
+         }
+
+         req.user = decoded;
+         next();
+       } catch (error) {
+         return res.status(401).json({ error: 'Unauthorized' });
+       }
+     };
+   };
+   ```
+
+   This middleware checks the user's role against the allowed roles and grants or denies access accordingly.
+
+4. **Secure API Routes with Authorization Middleware:**
+   Update `routes/api.js` to use the authorization middleware for specific routes:
+
+   ```javascript
+   // routes/api.js
+   const express = require('express');
+   const router = express.Router();
+   const authMiddleware = require('../middlewares/auth');
+
+   // GET /api/users (only accessible by admin)
+   router.get('/users', authMiddleware(['admin']), (req, res) => {
+     res.json({ message: 'List of users (admin only)' });
+   });
+
+   // GET /api/profile (accessible by both user and admin)
+   router.get('/profile', authMiddleware(['user', 'admin']), (req, res) => {
+     res.json({ message: 'User profile (user and admin)' });
+   });
+
+   module.exports = router;
+   ```
+
+   In this example, the `/api/users` route is accessible only to users with the 'admin' role, while the `/api/profile` route is accessible to both 'user' and 'admin'.
+
+5. **Update Express Server to Include API Routes:**
+   Update `app.js` to include the new API routes:
+
+   ```javascript
+   // app.js
+   const express = require('express');
+   const mongoose = require('mongoose');
+   const bodyParser = require('body-parser');
+   const jwt = require('jsonwebtoken');
+   require('dotenv').config();
+
+   const app = express();
+   const PORT = process.env.PORT || 3000;
+
+   // Connect to MongoDB
+   mongoose.connect(process.env.MONGO_URI, {
+     useNewUrlParser: true,
+     useUnifiedTopology: true,
+   });
+
+   // Middleware
+   app.use(bodyParser.json());
+
+   // Routes
+   const authRoutes = require('./routes/auth');
+   const apiRoutes = require('./routes/api');
+   app.use('/api/auth', authRoutes);
+   app.use('/api', apiRoutes);
+
+   // Start server
+   app.listen(PORT, () => {
+     console.log(`Server is running on http://localhost:${PORT}`);
+   });
+   ```
+
+6. **Test the Authentication and Authorization:**
+   Use tools like Postman to test the registration and login endpoints. After successfully logging in, include the generated JWT token in the Authorization header for requests to the protected API routes. Test accessing `/api/profile` with both 'user' and 'admin' roles and accessing `/api/users` with the 'admin' role.
+
+This example demonstrates a basic implementation of user roles and authorization in a Node.js application. Depending on your specific requirements, you might want to enhance this setup, add more roles, or implement additional features like role-based access control (RBAC).
+
+# Intro to MongoDB and Mongoose
+
+MongoDB is a popular NoSQL database that stores data in a flexible, JSON-like format called BSON (Binary JSON). It is designed to handle large amounts of data and scale horizontally across multiple servers. MongoDB is classified as a document-oriented database, and its flexible schema allows for the storage of documents with varying fields and structures.
+
+Key concepts in MongoDB include:
+
+1. **Document:** A document is a basic unit of data in MongoDB, similar to a row in a relational database. Documents are represented in BSON format, which is a binary-encoded serialization of JSON-like documents.
+
+2. **Collection:** A collection is a group of MongoDB documents. It is equivalent to a table in relational databases. Collections do not enforce a specific schema, allowing for flexibility in document structures.
+
+3. **Database:** A database in MongoDB is a container for collections. A MongoDB server can host multiple databases, each with its own set of collections.
+
+4. **Field:** A field is a key-value pair within a document. Fields represent the data attributes of the document.
+
+MongoDB provides a rich set of features, including indexing, sharding for horizontal scaling, and support for geospatial queries. It is widely used in web development, especially in scenarios where a flexible and scalable database solution is needed.
+
+**Mongoose:**
+Mongoose is an Object Data Modeling (ODM) library for MongoDB and Node.js. It provides a higher-level, schema-based abstraction over the MongoDB driver, making it easier to interact with MongoDB databases in a Node.js environment.
+
+Key features of Mongoose include:
+
+1. **Schema Definition:** Mongoose allows you to define a schema for your MongoDB documents, specifying the structure of each document and the data types of its fields.
+
+2. **Validation:** Mongoose provides built-in validation for data integrity. You can define validation rules for each field in your schema.
+
+3. **Middleware:** Mongoose supports middleware functions that allow you to execute logic before or after certain database operations, such as saving or querying documents.
+
+4. **Query Building:** Mongoose provides a powerful querying API that allows you to build complex queries using a fluent interface.
+
+5. **Connection Management:** Mongoose handles MongoDB connection management, including connection pooling and reconnection.
+
+Here's a simple example of using Mongoose to define a schema, create a model, and perform basic CRUD (Create, Read, Update, Delete) operations:
+
+```javascript
+const mongoose = require('mongoose');
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/mydatabase', { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Define a schema
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  age: { type: Number },
+});
+
+// Create a model
+const User = mongoose.model('User', userSchema);
+
+// Create a new user
+const newUser = new User({
+  username: 'john_doe',
+  email: 'john@example.com',
+  age: 25,
+});
+
+// Save the user to the database
+newUser.save()
+  .then((savedUser) => {
+    console.log('User saved:', savedUser);
+  })
+  .catch((error) => {
+    console.error('Error saving user:', error);
+  });
+
+// Find all users
+User.find()
+  .then((users) => {
+    console.log('All users:', users);
+  })
+  .catch((error) => {
+    console.error('Error fetching users:', error);
+  });
+```
+
+In this example, Mongoose is used to define a user schema, create a model, and perform operations such as creating and finding users. The MongoDB connection string (`'mongodb://localhost:27017/mydatabase'`) specifies the database URI, and the `useNewUrlParser` and `useUnifiedTopology` options are used for connection configuration.
+
+# Mongoose Data Models
+
+In Mongoose, data models define the structure and behavior of documents stored in a MongoDB collection. A Mongoose model is a constructor function that corresponds to a specific collection in MongoDB and defines the properties and methods associated with the documents in that collection. Here's a step-by-step guide to working with Mongoose data models:
+
+1. **Define a Schema:**
+   A schema is a blueprint that defines the structure of documents in a collection. It specifies the fields, their types, and any validation rules. Here's an example of defining a basic user schema:
+
+   ```javascript
+   const mongoose = require('mongoose');
+
+   const userSchema = new mongoose.Schema({
+     username: { type: String, required: true },
+     email: { type: String, required: true, unique: true },
+     age: { type: Number },
+   });
+
+   const User = mongoose.model('User', userSchema);
+   ```
+
+   In this example, `User` is the Mongoose model for the 'users' collection, and it has fields for `username`, `email`, and `age`.
+
+2. **Create an Instance:**
+   Use the model constructor to create instances of documents. Instances represent individual documents that can be saved to the database. For example:
+
+   ```javascript
+   const newUser = new User({
+     username: 'john_doe',
+     email: 'john@example.com',
+     age: 25,
+   });
+   ```
+
+3. **Save to the Database:**
+   Once an instance is created, you can save it to the database using the `save` method. This inserts a new document into the associated MongoDB collection:
+
+   ```javascript
+   newUser.save()
+     .then((savedUser) => {
+       console.log('User saved:', savedUser);
+     })
+     .catch((error) => {
+       console.error('Error saving user:', error);
+     });
+   ```
+
+4. **Query the Database:**
+   Mongoose provides a rich set of methods for querying the database. For example, to find all users:
+
+   ```javascript
+   User.find()
+     .then((users) => {
+       console.log('All users:', users);
+     })
+     .catch((error) => {
+       console.error('Error fetching users:', error);
+     });
+   ```
+
+   You can also use methods like `findOne`, `findById`, and various query operators to retrieve specific documents.
+
+5. **Update and Delete:**
+   Mongoose provides methods like `updateOne`, `updateMany`, `deleteOne`, and `deleteMany` for updating and deleting documents. Here's an example of updating a user:
+
+   ```javascript
+   User.updateOne({ username: 'john_doe' }, { age: 26 })
+     .then((result) => {
+       console.log('Update result:', result);
+     })
+     .catch((error) => {
+       console.error('Error updating user:', error);
+     });
+   ```
+
+   And an example of deleting a user:
+
+   ```javascript
+   User.deleteOne({ username: 'john_doe' })
+     .then((result) => {
+       console.log('Delete result:', result);
+     })
+     .catch((error) => {
+       console.error('Error deleting user:', error);
+     });
+   ```
+
+6. **Middleware:**
+   Mongoose supports middleware functions that allow you to execute logic before or after certain operations. For example, you can use the `pre` and `post` hooks to perform actions before or after saving a document.
+
+   ```javascript
+   userSchema.pre('save', function (next) {
+     // Logic to execute before saving
+     console.log('About to save:', this);
+     next();
+   });
+
+   userSchema.post('save', function (doc, next) {
+     // Logic to execute after saving
+     console.log('Saved:', doc);
+     next();
+   });
+   ```
+
+These are some of the fundamental concepts when working with Mongoose data models. Mongoose provides many more features, such as validation, population (referencing other documents), and support for middleware functions. It's important to refer to the official [Mongoose documentation](https://mongoosejs.com/docs/index.html) for a comprehensive guide and reference.
+
+# ASYNC CRUD Operations
+
+When dealing with CRUD (Create, Read, Update, Delete) operations in a Node.js application using Mongoose and MongoDB, asynchronous operations are essential. Node.js is designed to be non-blocking and asynchronous, making it suitable for handling concurrent operations, especially when interacting with databases. Here's an example of how you can perform asynchronous CRUD operations using Mongoose:
+
+1. **Connect to MongoDB:**
+   Before performing CRUD operations, establish a connection to your MongoDB database. Here's an example using Mongoose:
+
+   ```javascript
+   const mongoose = require('mongoose');
+
+   mongoose.connect('mongodb://localhost:27017/yourdatabase', {
+     useNewUrlParser: true,
+     useUnifiedTopology: true,
+   });
+
+   const db = mongoose.connection;
+
+   db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+   db.once('open', () => {
+     console.log('Connected to MongoDB');
+   });
+   ```
+
+2. **Define a Mongoose Model:**
+   Define a Mongoose model for your collection, specifying the schema and any validation rules:
+
+   ```javascript
+   const mongoose = require('mongoose');
+
+   const userSchema = new mongoose.Schema({
+     username: { type: String, required: true },
+     email: { type: String, required: true, unique: true },
+     age: { type: Number },
+   });
+
+   const User = mongoose.model('User', userSchema);
+   ```
+
+3. **Create (Insert) Operation:**
+   Perform an asynchronous create operation to insert a new document into the collection:
+
+   ```javascript
+   async function createUser(username, email, age) {
+     try {
+       const newUser = new User({ username, email, age });
+       const savedUser = await newUser.save();
+       console.log('User created:', savedUser);
+     } catch (error) {
+       console.error('Error creating user:', error);
+     }
+   }
+
+   createUser('john_doe', 'john@example.com', 25);
+   ```
+
+4. **Read Operation:**
+   Perform an asynchronous read operation to fetch documents from the collection:
+
+   ```javascript
+   async function findUsers() {
+     try {
+       const users = await User.find();
+       console.log('All users:', users);
+     } catch (error) {
+       console.error('Error fetching users:', error);
+     }
+   }
+
+   findUsers();
+   ```
+
+5. **Update Operation:**
+   Perform an asynchronous update operation to modify existing documents in the collection:
+
+   ```javascript
+   async function updateUser(username, newAge) {
+     try {
+       const result = await User.updateOne({ username }, { age: newAge });
+       console.log('Update result:', result);
+     } catch (error) {
+       console.error('Error updating user:', error);
+     }
+   }
+
+   updateUser('john_doe', 26);
+   ```
+
+6. **Delete Operation:**
+   Perform an asynchronous delete operation to remove documents from the collection:
+
+   ```javascript
+   async function deleteUser(username) {
+     try {
+       const result = await User.deleteOne({ username });
+       console.log('Delete result:', result);
+     } catch (error) {
+       console.error('Error deleting user:', error);
+     }
+   }
+
+   deleteUser('john_doe');
+   ```
+
+In this example, the `async/await` syntax is used to handle asynchronous operations more cleanly. Each CRUD operation is wrapped in an asynchronous function, allowing the use of `await` to wait for the operation to complete.
+
+Make sure to handle errors appropriately in a production environment and consider using try/catch blocks to manage asynchronous errors effectively.
